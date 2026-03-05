@@ -94,9 +94,39 @@ git commit -m "feat: add specific feature"
 - Reference relevant skills with @ syntax
 - DRY, YAGNI, TDD, frequent commits
 
+## External Plan Review
+
+After saving the plan file, **before offering execution options**, run an external review if a reviewer CLI is available.
+
+### Step 1: Check for reviewer
+
+Check if a reviewer CLI is installed. The plugin config file at `${CLAUDE_PLUGIN_ROOT}/config/plan-review.json` specifies which adapter to use. If the config file doesn't exist, skip review and proceed to Execution Handoff.
+
+### Step 2: Run the review
+
+Use the Bash tool to run the review script:
+
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/hooks/plan-review" "<path-to-plan-file>"
+```
+
+This script sends the plan to an external AI CLI (Codex or Gemini) and prints review feedback to stdout.
+
+### Step 3: Handle review result
+
+- If the output starts with **"LGTM"**: The plan passed review. Announce the result briefly and proceed to Execution Handoff.
+- If the output contains **actionable feedback**: Read the feedback carefully, revise the plan to address the substantive issues, save the updated plan file, and re-run the review (Step 2). The second review verifies that the revision actually addressed the feedback. Do not revise more than `maxReviews` times (default 2, configurable in `${CLAUDE_PLUGIN_ROOT}/config/plan-review.json`). After the limit, proceed to Execution Handoff regardless and note any unresolved feedback for the user.
+- If the **script exits with an error** or the reviewer CLI is not found: Announce that external review was skipped (reviewer not available) and proceed to Execution Handoff.
+
+### Important
+
+- Do NOT enter or exit plan mode during review. This is a normal-mode Bash call.
+- The review is advisory. The user makes the final call on whether to proceed.
+- Always show the user a summary of what the reviewer said, whether LGTM or feedback.
+
 ## Execution Handoff
 
-After saving the plan, offer execution choice:
+After saving the plan (and completing external review if configured), offer execution choice:
 
 **"Plan complete and saved to `docs/plans/<filename>.md`. Two execution options:**
 

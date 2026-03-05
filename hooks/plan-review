@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+# Plan review script for superpowers plugin
+# Sends a plan file to an external AI CLI (Codex or Gemini) for review.
+#
+# Usage: plan-review <plan-file-path>
+#
+# Reads config from ${CLAUDE_PLUGIN_ROOT}/config/plan-review.json
+# Falls back to sensible defaults if config is missing.
+
+set -euo pipefail
+
+PLAN_FILE="${1:-}"
+if [ -z "$PLAN_FILE" ]; then
+    echo "Usage: plan-review <plan-file-path>" >&2
+    exit 1
+fi
+
+if [ ! -f "$PLAN_FILE" ]; then
+    echo "Error: Plan file not found: $PLAN_FILE" >&2
+    exit 1
+fi
+
+# Determine plugin root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# Load config
+CONFIG_FILE="${PLUGIN_ROOT}/config/plan-review.json"
+ADAPTER="codex"
+CODEX_MODEL=""
+CODEX_SANDBOX="read-only"
+GEMINI_MODEL=""
+CUSTOM_PROMPT=""
+
+if [ -f "$CONFIG_FILE" ] && command -v jq &>/dev/null; then
+    ADAPTER=$(jq -r '.adapter // "codex"' "$CONFIG_FILE")
+    CODEX_MODEL=$(jq -r '.codex.model // ""' "$CONFIG_FILE")
+    CODEX_SANDBOX=$(jq -r '.codex.sandbox // "read-only"' "$CONFIG_FILE")
+    GEMINI_MODEL=$(jq -r '.gemini.model // ""' "$CONFIG_FILE")
+    CUSTOM_PROMPT=$(jq -r '.prompt // ""' "$CONFIG_FILE")
+fi
+
+# Read plan content
+PLAN_CONTENT=$(cat "$PLAN_FILE")
+
+# Build the review prompt
+PROMPT="You are reviewing an implementation plan created by an AI coding assistant. Analyze the plan critically and provide actionable feedback.
+
+## Plan to Review
+
+${PLAN_CONTENT}
+
+## Review Criteria
+
+1. **Missing edge cases**: Are there scenarios the plan doesn't account for?
+2. **Architectural concerns**: Are there design decisions that could cause problems?
+3. **Security issues**: Are there potential security vulnerabilities?
+4. **Performance concerns**: Are there potential performance bottlenecks?
+5. **Error handling**: Are failure modes properly addressed?
+6. **Dependencies**: Are there missing or unnecessary dependencies?"
+
+if [ -n "$CUSTOM_PROMPT" ]; then
+    PROMPT="${PROMPT}
+
+## Additional Review Instructions
+
+${CUSTOM_PROMPT}"
+fi
+
+PROMPT="${PROMPT}
+
+## Instructions
+
+- If the plan is solid and well-thought-out, respond with \"LGTM\" followed by a brief explanation.
+- If there are improvements needed, list them as actionable items with specific suggestions.
+- Be concise and focus on substantive issues, not style preferences.
+- Format your response as a numbered list of findings, or \"LGTM\" if no issues found."
+
+# Run the appropriate adapter
+case "$ADAPTER" in
+    codex)
+        if ! command -v codex &>/dev/null; then
+            echo "Error: codex CLI not found. Install with: npm install -g @openai/codex" >&2
+            exit 1
+        fi
+        ARGS=(exec "$PROMPT" --sandbox "$CODEX_SANDBOX" --full-auto --skip-git-repo-check)
+        if [ -n "$CODEX_MODEL" ]; then
+            ARGS+=(--model "$CODEX_MODEL")
+        fi
+        codex "${ARGS[@]}"
+        ;;
+    gemini)
+        if ! command -v gemini &>/dev/null; then
+            echo "Error: gemini CLI not found. See: https://github.com/google-gemini/gemini-cli" >&2
+            exit 1
+        fi
+        ARGS=()
+        if [ -n "$GEMINI_MODEL" ]; then
+            ARGS+=(--model "$GEMINI_MODEL")
+        fi
+        echo "$PROMPT" | gemini "${ARGS[@]}"
+        ;;
+    *)
+        echo "Error: Unknown adapter '$ADAPTER'. Use 'codex' or 'gemini'." >&2
+        exit 1
+        ;;
+esac

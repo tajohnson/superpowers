@@ -1,0 +1,12 @@
+{
+  "adapter": "codex",
+  "maxReviews": 2,
+  "prompt": "",
+  "codex": {
+    "model": "",
+    "sandbox": "read-only"
+  },
+  "gemini": {
+    "model": ""
+  }
+}
