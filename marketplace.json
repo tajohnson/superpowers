@@ -1,0 +1,19 @@
+{
+  "name": "superpowers-reviewed",
+  "description": "Superpowers fork with Codex/Gemini plan review",
+  "owner": {
+    "name": "Thomas Johnson",
+    "email": "tj@mailroute.net"
+  },
+  "plugins": [
+    {
+      "name": "superpowers",
+      "description": "Core skills library with external plan review",
+      "version": "4.3.2",
+      "source": "./",
+      "author": {
+        "name": "Thomas Johnson"
+      }
+    }
+  ]
+}
